@@ -1,6 +1,7 @@
 # Import needed libraries
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 # Add random seed to ensure reproducibility
 np.random.seed(1990)
@@ -106,4 +107,45 @@ for col in ["attendance_baseline_pct", "score_baseline"]:
     miss_mask = np.random.rand(N) < 0.05
     df.loc[miss_mask, col] = np.nan
 
+
+# Export datasets (row-level + Tableau-ready aggregates)
+
+# Ensure data folder exists
+data_dir = Path("data")
+data_dir.mkdir(parents=True, exist_ok=True)
+
+# 1) Save the row-level dataset
+row_level_path = data_dir / "learners_kakuma_dadaab_sample.csv"
+df.to_csv(row_level_path, index=False)
+
+# 2) Create Tableau-ready aggregates
+# Attendance and score improvements (endline - baseline), ignoring missing values
+df["attendance_change"] = df["attendance_endline_pct"] - df["attendance_baseline_pct"]
+df["score_change"] = df["score_endline"] - df["score_baseline"]
+
+agg = (
+    df.groupby(["complex", "site", "sex", "age_group"], dropna=False)
+      .agg(
+          learners=("learner_id", "count"),
+          dropout_rate=("dropped_out", "mean"),
+          baseline_attendance_mean=("attendance_baseline_pct", "mean"),
+          endline_attendance_mean=("attendance_endline_pct", "mean"),
+          attendance_change_mean=("attendance_change", "mean"),
+          baseline_score_mean=("score_baseline", "mean"),
+          endline_score_mean=("score_endline", "mean"),
+          score_change_mean=("score_change", "mean")
+      )
+      .reset_index()
+)
+
+# Make rates and means presentation-ready
+agg["dropout_rate"] = (agg["dropout_rate"] * 100).round(1)
+for c in [
+    "baseline_attendance_mean", "endline_attendance_mean", "attendance_change_mean",
+    "baseline_score_mean", "endline_score_mean", "score_change_mean"
+]:
+    agg[c] = agg[c].round(1)
+
+agg_path = data_dir / "tableau_agg_kakuma_dadaab_sample.csv"
+agg.to_csv(agg_path, index=False)
 
